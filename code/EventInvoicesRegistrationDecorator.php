@@ -60,6 +60,25 @@ class EventInvoicesRegistrationDecorator extends DataObjectDecorator{
 
 		$invoice->setParent($registration);
 		$invoice->EventRegistrationID = $registration->ID;
+		$invoice->write();
+
+		//create invoice lines
+		foreach($registration->Attendees() as $attendee){
+			if($attendee->TicketID && $ticket = $attendee->Ticket()){
+				$description = sprintf(_t("EventRegistration.INVOICELINE"));
+				if($ticket->InvoiceItems()->exists()){
+					foreach($ticket->InvoiceItems() as $origitem){
+						$newitem = $origitem->duplicate(true);
+						//TODO: set name(s)
+						$invoice->InvoiceItems()->add($newitem);
+					}
+				}else{
+					$invoice->addItem($ticket->Type,$ticket->Price,1);
+				}
+			}
+		}
+
+		/* old approach
 
 		$tickets = array();
 		foreach($registration->Attendees() as $attendee){
@@ -79,6 +98,8 @@ class EventInvoicesRegistrationDecorator extends DataObjectDecorator{
 			$ticket = DataObject::get_by_id('EventTicket',$ticketid);
 			$invoice->addItem($ticket->Type,$ticket->Price,$attendees->Count());
 		}
+
+		*/
 
 		$this->owner->extend("onCreateInvoice",$invoice);
 		if($pdfversion)
