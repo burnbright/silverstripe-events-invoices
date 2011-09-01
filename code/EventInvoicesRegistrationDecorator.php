@@ -43,14 +43,13 @@ class EventInvoicesRegistrationDecorator extends DataObjectDecorator{
 	 */
 	function createInvoice($duedate = null,$pdfversion = true){
 		$invoice = new Invoice();
-		$registration = $this->owner;
-		$event = $registration->Event();
+		$event = $this->owner->Event();
 
 		//set email
 		$invoice->Email = $this->owner->getEmail();
-
 		$invoice->Name = $event->Title;//set name
 		$invoice->InvoiceTypeID = $event->InvoiceTypeID; //TODO: make this default to something
+		$invoice->Address =	$this->owner->Address;
 
 		if($duedate){
 			$invoice->DueDate = $duedate;
@@ -58,50 +57,36 @@ class EventInvoicesRegistrationDecorator extends DataObjectDecorator{
 			$invoice->DueDate = date('Y-m-d', strtotime("+".$event->InvoiceType()->PaymentDays." days"));
 		}
 
-		$invoice->setParent($registration);
-		$invoice->EventRegistrationID = $registration->ID;
+		$invoice->setParent($this->owner);
+		$invoice->EventRegistrationID = $this->owner->ID;
 		$invoice->write();
 
+		$lines = array();
+
 		//create invoice lines
-		foreach($registration->Attendees() as $attendee){
+		foreach($this->owner->Attendees() as $attendee){
 			if($attendee->TicketID && $ticket = $attendee->Ticket()){
 				$description = sprintf(_t("EventRegistration.INVOICELINE"));
 				if($ticket->InvoiceItems()->exists()){
-					foreach($ticket->InvoiceItems() as $origitem){
-						$newitem = $origitem->duplicate(true);
-						//TODO: set name(s)
+					foreach($ticket->InvoiceItems($filter = "",$sort = "\"Sort\" ASC,\"ID\" ASC") as $origitem){
+						$newitem = $origitem->duplicate(true); //true = write to db
+						$newitem->EventTicketID = null;
+						$newitem->parseDescription($attendee); //set name(s)
+						$newitem->write();
 						$invoice->InvoiceItems()->add($newitem);
 					}
 				}else{
-					$invoice->addItem($ticket->Type,$ticket->Price,1);
+					$description = sprintf(_t("EventInvoices.DESCRIPTION","%s for %s"),$ticket->Type,$attendee->getFirstName()." ".$attendee->getSurname());
+					$invoice->addItem($description,$ticket->Price,1);
 				}
 			}
 		}
 
-		/* old approach
-
-		$tickets = array();
-		foreach($registration->Attendees() as $attendee){
-			if($attendee->TicketID){
-				if(!isset($tickets[$attendee->TicketID])){
-					$tickets[$attendee->TicketID] = new DataObjectSet();
-				}
-				$tickets[$attendee->TicketID]->push($attendee);
-			}
-		}
-
-		if(!count($tickets))
-			return null;
-
-		$invoice->write();
-		foreach($tickets as $ticketid => $attendees){
-			$ticket = DataObject::get_by_id('EventTicket',$ticketid);
-			$invoice->addItem($ticket->Type,$ticket->Price,$attendees->Count());
-		}
-
-		*/
+		//TODO: group all invoice items that match in price and description
+			//find all unique, add 1 to quantity for each duplicate (match on price and description)
 
 		$this->owner->extend("onCreateInvoice",$invoice);
+		$invoice->write();
 		if($pdfversion)
 			$invoice->generatePDFInvoice();
 
