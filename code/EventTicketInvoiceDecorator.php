@@ -26,11 +26,15 @@ class EventTicketInvoiceDecorator extends DataObjectDecorator{
 
 		//TODO: add note about how to specify attendee name in description
 
-		$itemstable = new CustomTableField("InvoiceItems", "InvoiceItem", $fieldlist,$fieldtypes,null,$filter);
-		$fields->addFieldsToTab('Root.InvoiceLines',array(
-			$itemstable,
-		new LiteralField("invoicelinesnote", "<p class=\"message warning\">Make sure the sum total of these items matches what you have specified as the ticket price.</p>"),
-		));
+		if($this->owner->ID){
+			$itemstable = new CustomTableField("InvoiceItems", "InvoiceItem", $fieldlist,$fieldtypes,null,$filter);
+			$fields->addFieldsToTab('Root.InvoiceLines',array(
+				$itemstable,
+			new LiteralField("invoicelinesnote", "<p class=\"message warning\">Make sure the sum total of these items matches what you have specified as the ticket price.</p>"),
+			));
+		}else{
+			$fields->addFieldsToTab('Root.InvoiceLines',new LiteralField("SaveFirst", "<p class=\"message warning\">Save the ticket and then you can enter individual invoice lines.</p>"));
+		}
 	}
 
 }
